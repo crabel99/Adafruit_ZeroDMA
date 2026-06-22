@@ -52,6 +52,55 @@ __attribute__((__aligned__(16))) static DmacDescriptor ///< 128 bit alignment
 // ISR (in C, outside of class context) to access callbacks.
 static Adafruit_ZeroDMA *_dmaPtr[DMAC_CH_NUM] = {0}; // Init to NULL
 
+/// @cond INTERNAL
+#if defined(__SAMD51__) || defined(__SAME51__)
+#define ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
+#define ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel) DMAC->Channel[channel]
+#define ADAFRUIT_ZERODMA_DMAC_INTPEND_ID() DMAC->INTPEND.bit.ID
+#define ADAFRUIT_ZERODMA_CHINT_TERR DMAC_CHINTENCLR_TERR
+#define ADAFRUIT_ZERODMA_CHINT_TCMPL DMAC_CHINTENCLR_TCMPL
+#define ADAFRUIT_ZERODMA_CHINT_SUSP DMAC_CHINTENCLR_SUSP
+#define ADAFRUIT_ZERODMA_CHINT_MASK                                            \
+  (ADAFRUIT_ZERODMA_CHINT_TERR | ADAFRUIT_ZERODMA_CHINT_TCMPL |                \
+   ADAFRUIT_ZERODMA_CHINT_SUSP)
+#elif defined(__SAME53__) || defined(__SAME54__)
+#define ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
+#define ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+#define ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel) DMAC_REGS->CHANNEL[channel]
+#define ADAFRUIT_ZERODMA_DMAC_INTPEND_ID()                                     \
+  ((DMAC_REGS->DMAC_INTPEND & DMAC_INTPEND_ID_Msk) >> DMAC_INTPEND_ID_Pos)
+#define ADAFRUIT_ZERODMA_CHINT_TERR DMAC_CHINTFLAG_TERR_Msk
+#define ADAFRUIT_ZERODMA_CHINT_TCMPL DMAC_CHINTFLAG_TCMPL_Msk
+#define ADAFRUIT_ZERODMA_CHINT_SUSP DMAC_CHINTFLAG_SUSP_Msk
+#define ADAFRUIT_ZERODMA_CHINT_MASK                                            \
+  (ADAFRUIT_ZERODMA_CHINT_TERR | ADAFRUIT_ZERODMA_CHINT_TCMPL |                \
+   ADAFRUIT_ZERODMA_CHINT_SUSP)
+#endif
+
+#ifndef ADAFRUIT_ZERODMA_CHINT_TERR
+#define ADAFRUIT_ZERODMA_CHINT_TERR DMAC_CHINTENCLR_TERR
+#define ADAFRUIT_ZERODMA_CHINT_TCMPL DMAC_CHINTENCLR_TCMPL
+#define ADAFRUIT_ZERODMA_CHINT_SUSP DMAC_CHINTENCLR_SUSP
+#define ADAFRUIT_ZERODMA_CHINT_MASK                                            \
+  (ADAFRUIT_ZERODMA_CHINT_TERR | ADAFRUIT_ZERODMA_CHINT_TCMPL |                \
+   ADAFRUIT_ZERODMA_CHINT_SUSP)
+#endif
+
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+#define ADAFRUIT_ZERODMA_DMAC_BUSYCH() DMAC_REGS->DMAC_BUSYCH
+#define ADAFRUIT_ZERODMA_DMAC_CHANNEL_BUSY(channel)                            \
+  (ADAFRUIT_ZERODMA_DMAC_BUSYCH() & (1 << (channel)))
+#elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
+#define ADAFRUIT_ZERODMA_DMAC_BUSYCH() DMAC->BUSYCH.reg
+#define ADAFRUIT_ZERODMA_DMAC_CHANNEL_BUSY(channel)                            \
+  (ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).CHSTATUS.reg & DMAC_CHSTATUS_BUSY)
+#else
+#define ADAFRUIT_ZERODMA_DMAC_BUSYCH() DMAC->BUSYCH.reg
+#define ADAFRUIT_ZERODMA_DMAC_CHANNEL_BUSY(channel)                            \
+  (DMAC->CHSTATUS.reg & DMAC_CHSTATUS_BUSY)
+#endif
+/// @endcond
+
 // Adapted from ASF3 interrupt_sam_nvic.c:
 
 static volatile unsigned long cpu_irq_critical_section_counter = 0;
@@ -118,18 +167,24 @@ Adafruit_ZeroDMA::Adafruit_ZeroDMA(void) {
             can't touch them in C, but the next function after this, being
             part of the ZeroDMA class, can.)
 */
-#ifdef __SAMD51__
+extern "C" {
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
 void DMAC_0_Handler(void) {
 #else
 void DMAC_Handler(void) {
 #endif
   cpu_irq_enter_critical();
 
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
+  uint8_t channel =
+      ADAFRUIT_ZERODMA_DMAC_INTPEND_ID(); // Channel # causing interrupt
+#else
   uint8_t channel = DMAC->INTPEND.bit.ID; // Channel # causing interrupt
+#endif
   if (channel < DMAC_CH_NUM) {
     Adafruit_ZeroDMA *dma;
     if ((dma = _dmaPtr[channel])) { // -> Channel's ZeroDMA object
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
       // Call IRQ handler with channel #
       dma->_IRQhandler(channel);
 #else
@@ -143,43 +198,70 @@ void DMAC_Handler(void) {
   cpu_irq_leave_critical();
 }
 
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
 void DMAC_1_Handler(void) __attribute__((weak, alias("DMAC_0_Handler")));
 void DMAC_2_Handler(void) __attribute__((weak, alias("DMAC_0_Handler")));
 void DMAC_3_Handler(void) __attribute__((weak, alias("DMAC_0_Handler")));
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+void DMAC_OTHER_Handler(void) __attribute__((weak, alias("DMAC_0_Handler")));
+#else
 void DMAC_4_Handler(void) __attribute__((weak, alias("DMAC_0_Handler")));
 #endif
+#endif
+}
 
 void Adafruit_ZeroDMA::_IRQhandler(uint8_t flags) {
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
   // 'flags' is initially passed in as channel number,
   // from which we look up the actual interrupt flags...
-  flags = DMAC->Channel[flags].CHINTFLAG.reg;
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+  flags = ADAFRUIT_ZERODMA_DMAC_CHANNEL(flags).DMAC_CHINTFLAG;
+#else
+  flags = ADAFRUIT_ZERODMA_DMAC_CHANNEL(flags).CHINTFLAG.reg;
 #endif
-  if (flags & DMAC_CHINTENCLR_TERR) {
+#endif
+  if (flags & ADAFRUIT_ZERODMA_CHINT_TERR) {
     // Clear error flag
-#ifdef __SAMD51__
-    DMAC->Channel[channel].CHINTFLAG.reg = DMAC_CHINTENCLR_TERR;
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHINTFLAG =
+        ADAFRUIT_ZERODMA_CHINT_TERR;
+#else
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).CHINTFLAG.reg =
+        ADAFRUIT_ZERODMA_CHINT_TERR;
+#endif
 #else
     DMAC->CHINTFLAG.reg = DMAC_CHINTENCLR_TERR;
 #endif
     jobStatus = DMA_STATUS_ERR_IO;
     if (callback[DMA_CALLBACK_TRANSFER_ERROR])
       callback[DMA_CALLBACK_TRANSFER_ERROR](this);
-  } else if (flags & DMAC_CHINTENCLR_TCMPL) {
+  } else if (flags & ADAFRUIT_ZERODMA_CHINT_TCMPL) {
     // Clear transfer complete flag
-#ifdef __SAMD51__
-    DMAC->Channel[channel].CHINTFLAG.reg = DMAC_CHINTENCLR_TCMPL;
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHINTFLAG =
+        ADAFRUIT_ZERODMA_CHINT_TCMPL;
+#else
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).CHINTFLAG.reg =
+        ADAFRUIT_ZERODMA_CHINT_TCMPL;
+#endif
 #else
     DMAC->CHINTFLAG.reg = DMAC_CHINTENCLR_TCMPL;
 #endif
     jobStatus = DMA_STATUS_OK;
     if (callback[DMA_CALLBACK_TRANSFER_DONE])
       callback[DMA_CALLBACK_TRANSFER_DONE](this);
-  } else if (flags & DMAC_CHINTENCLR_SUSP) {
+  } else if (flags & ADAFRUIT_ZERODMA_CHINT_SUSP) {
     // Clear channel suspend flag
-#ifdef __SAMD51__
-    DMAC->Channel[channel].CHINTFLAG.reg = DMAC_CHINTENCLR_SUSP;
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHINTFLAG =
+        ADAFRUIT_ZERODMA_CHINT_SUSP;
+#else
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).CHINTFLAG.reg =
+        ADAFRUIT_ZERODMA_CHINT_SUSP;
+#endif
 #else
     DMAC->CHINTFLAG.reg = DMAC_CHINTENCLR_SUSP;
 #endif
@@ -223,29 +305,49 @@ ZeroDMAstatus Adafruit_ZeroDMA::allocate(void) {
 #if !defined(DMAC_RESERVED_CHANNELS)
 #if (SAML21) || (SAML22) || (SAMC20) || (SAMC21)
     PM->AHBMASK.bit.DMAC_ = 1;
-#elif defined(__SAMD51__)
+#elif defined(__SAMD51__) || defined(__SAME51__)
     MCLK->AHBMASK.bit.DMAC_ = 1; // Initialize DMA clocks
+#elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_REGS)
+    MCLK_REGS->MCLK_AHBMASK |= MCLK_AHBMASK_DMAC_Msk; // Initialize DMA clocks
 #else
     PM->AHBMASK.bit.DMAC_ = 1; // Initialize DMA clocks
     PM->APBBMASK.bit.DMAC_ = 1;
 #endif
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+    DMAC_REGS->DMAC_CTRL &= ~DMAC_CTRL_DMAENABLE_Msk; // Disable DMA controller
+    DMAC_REGS->DMAC_CTRL |= DMAC_CTRL_SWRST_Msk;      // Perform software reset
+
+    // Initialize descriptor list addresses
+    DMAC_REGS->DMAC_BASEADDR = (uint32_t)_descriptor;
+    DMAC_REGS->DMAC_WRBADDR = (uint32_t)_writeback;
+#else
     DMAC->CTRL.bit.DMAENABLE = 0; // Disable DMA controller
     DMAC->CTRL.bit.SWRST = 1;     // Perform software reset
 
     // Initialize descriptor list addresses
     DMAC->BASEADDR.bit.BASEADDR = (uint32_t)_descriptor;
     DMAC->WRBADDR.bit.WRBADDR = (uint32_t)_writeback;
+#endif
     memset(_descriptor, 0, sizeof(_descriptor));
     memset(_writeback, 0, sizeof(_writeback));
 
     // Re-enable DMA controller with all priority levels
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+    DMAC_REGS->DMAC_CTRL = DMAC_CTRL_DMAENABLE_Msk | DMAC_CTRL_LVLEN(0xF);
+#else
     DMAC->CTRL.reg = DMAC_CTRL_DMAENABLE | DMAC_CTRL_LVLEN(0xF);
+#endif
 #endif
 
     // Enable DMA interrupt at lowest priority
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
     IRQn_Type irqs[] = {DMAC_0_IRQn, DMAC_1_IRQn, DMAC_2_IRQn, DMAC_3_IRQn,
-                        DMAC_4_IRQn};
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+                        DMAC_OTHER_IRQn
+#else
+                        DMAC_4_IRQn
+#endif
+    };
     for (uint8_t i = 0; i < (sizeof irqs / sizeof irqs[0]); i++) {
       NVIC_EnableIRQ(irqs[i]);
       NVIC_SetPriority(irqs[i], (1 << __NVIC_PRIO_BITS) - 1);
@@ -260,7 +362,11 @@ ZeroDMAstatus Adafruit_ZeroDMA::allocate(void) {
   _dmaPtr[channel] = this;      // Channel-index-to-object pointer
 
   // Reset the allocated channel
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+  ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA &=
+      ~DMAC_CHCTRLA_ENABLE_Msk;
+  ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA |= DMAC_CHCTRLA_SWRST_Msk;
+#elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
   DMAC->Channel[channel].CHCTRLA.bit.ENABLE = 0;
   DMAC->Channel[channel].CHCTRLA.bit.SWRST = 1;
 #else
@@ -270,10 +376,24 @@ ZeroDMAstatus Adafruit_ZeroDMA::allocate(void) {
 #endif
 
   // Clear software trigger
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+  DMAC_REGS->DMAC_SWTRIGCTRL &= ~(1 << channel);
+#else
   DMAC->SWTRIGCTRL.reg &= ~(1 << channel);
+#endif
 
   // Configure default behaviors
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+  ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHPRILVL =
+      DMAC_CHPRILVL_PRILVL(0);
+  ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA =
+      (ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA &
+       ~(DMAC_CHCTRLA_TRIGSRC_Msk | DMAC_CHCTRLA_TRIGACT_Msk |
+         DMAC_CHCTRLA_BURSTLEN_Msk)) |
+      DMAC_CHCTRLA_TRIGSRC(peripheralTrigger) |
+      DMAC_CHCTRLA_TRIGACT(triggerAction) |
+      DMAC_CHCTRLA_BURSTLEN(DMAC_CHCTRLA_BURSTLEN_SINGLE_Val);
+#elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
   DMAC->Channel[channel].CHPRILVL.bit.PRILVL = 0;
   DMAC->Channel[channel].CHCTRLA.bit.TRIGSRC = peripheralTrigger;
   DMAC->Channel[channel].CHCTRLA.bit.TRIGACT = triggerAction;
@@ -291,7 +411,12 @@ ZeroDMAstatus Adafruit_ZeroDMA::allocate(void) {
 }
 
 void Adafruit_ZeroDMA::setPriority(dma_priority pri) {
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+  ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHPRILVL =
+      (ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHPRILVL &
+       ~DMAC_CHPRILVL_PRILVL_Msk) |
+      DMAC_CHPRILVL_PRILVL(pri);
+#elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
   DMAC->Channel[channel].CHPRILVL.bit.PRILVL = pri;
 #else
   DMAC->CHCTRLB.bit.LVL = pri;
@@ -306,20 +431,29 @@ ZeroDMAstatus Adafruit_ZeroDMA::free(void) {
 
   cpu_irq_enter_critical(); // jobStatus is volatile
 
-#ifdef __SAMD51__
-  if (DMAC->Channel[channel].CHSTATUS.reg & DMAC_CHSTATUS_BUSY) {
-#else
-  if (DMAC->CHSTATUS.reg & DMAC_CHSTATUS_BUSY) {
-#endif
+  if (ADAFRUIT_ZERODMA_DMAC_CHANNEL_BUSY(channel)) {
     status = DMA_STATUS_BUSY; // Can't leave when busy
   } else if ((channel < DMAC_CH_NUM) && (_channelMask & (1 << channel))) {
     // Valid in-use channel; release it
     _channelMask &= ~(1 << channel); // Clear bit
     if (!_channelMask) {             // No more channels in use?
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
       NVIC_DisableIRQ(DMAC_0_IRQn); // Disable DMA interrupt
+      NVIC_DisableIRQ(DMAC_1_IRQn);
+      NVIC_DisableIRQ(DMAC_2_IRQn);
+      NVIC_DisableIRQ(DMAC_3_IRQn);
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+      NVIC_DisableIRQ(DMAC_OTHER_IRQn);
+#else
+      NVIC_DisableIRQ(DMAC_4_IRQn);
+#endif
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+      DMAC_REGS->DMAC_CTRL &= ~DMAC_CTRL_DMAENABLE_Msk;  // Disable DMA
+      MCLK_REGS->MCLK_AHBMASK &= ~MCLK_AHBMASK_DMAC_Msk; // Disable DMA clock
+#else
       DMAC->CTRL.bit.DMAENABLE = 0; // Disable DMA
       MCLK->AHBMASK.bit.DMAC_ = 0;  // Disable DMA clock
+#endif
 #else
       NVIC_DisableIRQ(DMAC_IRQn);   // Disable DMA interrupt
       DMAC->CTRL.bit.DMAENABLE = 0; // Disable DMA
@@ -345,11 +479,7 @@ ZeroDMAstatus Adafruit_ZeroDMA::startJob(void) {
 
   cpu_irq_enter_critical(); // Job status is volatile
 
-#ifdef __SAMD51__
-  if (DMAC->Channel[channel].CHSTATUS.reg & DMAC_CHSTATUS_BUSY) {
-#else
-  if (DMAC->CHSTATUS.reg & DMAC_CHSTATUS_BUSY) {
-#endif
+  if (ADAFRUIT_ZERODMA_DMAC_CHANNEL_BUSY(channel)) {
     status = DMA_STATUS_BUSY; // Resource is busy
   } else if (channel >= DMAC_CH_NUM) {
     status = DMA_STATUS_ERR_NOT_INITIALIZED; // Channel not in use
@@ -361,7 +491,14 @@ ZeroDMAstatus Adafruit_ZeroDMA::startJob(void) {
       if (callback[i])
         interruptMask |= (1 << i);
     jobStatus = DMA_STATUS_BUSY;
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHINTENSET =
+        ADAFRUIT_ZERODMA_CHINT_MASK & interruptMask;
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHINTENCLR =
+        ADAFRUIT_ZERODMA_CHINT_MASK & ~interruptMask;
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA |=
+        DMAC_CHCTRLA_ENABLE_Msk;
+#elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
     DMAC->Channel[channel].CHINTENSET.reg =
         DMAC_CHINTENSET_MASK & interruptMask;
     DMAC->Channel[channel].CHINTENCLR.reg =
@@ -391,7 +528,10 @@ void Adafruit_ZeroDMA::setCallback(void (*cb)(Adafruit_ZeroDMA *),
 // Suspend/resume don't quite do what I thought -- avoid using for now.
 void Adafruit_ZeroDMA::suspend(void) {
   cpu_irq_enter_critical();
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+  ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLB |=
+      DMAC_CHCTRLB_CMD_SUSPEND;
+#elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
   DMAC->Channel[channel].CHCTRLB.reg |= DMAC_CHCTRLB_CMD_SUSPEND;
 #else
   DMAC->CHID.bit.ID = channel;
@@ -406,15 +546,18 @@ void Adafruit_ZeroDMA::resume(void) {
   if (jobStatus == DMA_STATUS_SUSPEND) {
     int count;
     uint32_t bitMask = 1 << channel;
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLB |=
+        DMAC_CHCTRLB_CMD_RESUME;
+#elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
     DMAC->Channel[channel].CHCTRLB.reg |= DMAC_CHCTRLB_CMD_RESUME;
 #else
     DMAC->CHID.bit.ID = channel;
     DMAC->CHCTRLB.reg |= DMAC_CHCTRLB_CMD_RESUME;
 #endif
 
-    for (count = 0;
-         (count < MAX_JOB_RESUME_COUNT) && !(DMAC->BUSYCH.reg & bitMask);
+    for (count = 0; (count < MAX_JOB_RESUME_COUNT) &&
+                    !(ADAFRUIT_ZERODMA_DMAC_BUSYCH() & bitMask);
          count++)
       ;
 
@@ -428,7 +571,10 @@ void Adafruit_ZeroDMA::resume(void) {
 void Adafruit_ZeroDMA::abort(void) {
   if (channel <= DMAC_CH_NUM) {
     cpu_irq_enter_critical();
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA &=
+        ~DMAC_CHCTRLA_ENABLE_Msk; // Disable channel
+#elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
     DMAC->Channel[channel].CHCTRLA.bit.ENABLE = 0; // Disable channel
 #else
     DMAC->CHID.bit.ID = channel; // Select channel
@@ -448,7 +594,12 @@ void Adafruit_ZeroDMA::setTrigger(uint8_t trigger) {
   // (old lib required configure before alloc -- either way OK now)
   if (channel < DMAC_CH_NUM) {
     cpu_irq_enter_critical();
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA =
+        (ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA &
+         ~DMAC_CHCTRLA_TRIGSRC_Msk) |
+        DMAC_CHCTRLA_TRIGSRC(trigger);
+#elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
     DMAC->Channel[channel].CHCTRLA.bit.TRIGSRC = trigger;
 #else
     DMAC->CHID.bit.ID = channel;
@@ -467,7 +618,12 @@ void Adafruit_ZeroDMA::setAction(dma_transfer_trigger_action action) {
   // (old lib required configure before alloc -- either way OK now)
   if (channel < DMAC_CH_NUM) {
     cpu_irq_enter_critical();
-#ifdef __SAMD51__
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA =
+        (ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA &
+         ~DMAC_CHCTRLA_TRIGACT_Msk) |
+        DMAC_CHCTRLA_TRIGACT(action);
+#elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
     DMAC->Channel[channel].CHCTRLA.bit.TRIGACT = action;
 #else
     DMAC->CHID.bit.ID = channel;
@@ -480,7 +636,11 @@ void Adafruit_ZeroDMA::setAction(dma_transfer_trigger_action action) {
 // Issue software trigger. Channel must be allocated & descriptors added!
 void Adafruit_ZeroDMA::trigger(void) {
   if ((channel <= DMAC_CH_NUM) & hasDescriptors)
+#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
+    DMAC_REGS->DMAC_SWTRIGCTRL |= (1 << channel);
+#else
     DMAC->SWTRIGCTRL.reg |= (1 << channel);
+#endif
 }
 
 uint8_t Adafruit_ZeroDMA::getChannel(void) { return channel; }
@@ -502,12 +662,8 @@ DmacDescriptor *Adafruit_ZeroDMA::addDescriptor(void *src, void *dst,
   if (channel >= DMAC_CH_NUM)
     return NULL;
 
-    // Can't do while job's busy
-#ifdef __SAMD51__
-  if (DMAC->Channel[channel].CHSTATUS.reg & DMAC_CHSTATUS_BUSY)
-#else
-  if (DMAC->CHSTATUS.reg & DMAC_CHSTATUS_BUSY)
-#endif
+  // Can't do while job's busy
+  if (ADAFRUIT_ZERODMA_DMAC_CHANNEL_BUSY(channel))
     return NULL;
 
   DmacDescriptor *desc;
@@ -636,7 +792,7 @@ void Adafruit_ZeroDMA::changeDescriptor(DmacDescriptor *desc, void *src,
 #if 0
 	cpu_irq_enter_critical();
 	jobStatus          = DMA_STATUS_OK;
-#ifdef __SAMD51__
+#if defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
 	DMAC->Channel[channel].CHCTRLA.bit.ENABLE = 1;
 #else
 	DMAC->CHID.bit.ID  = channel;
