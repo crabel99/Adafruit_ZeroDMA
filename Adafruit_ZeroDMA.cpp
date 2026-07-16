@@ -199,13 +199,16 @@ void DMAC_Handler(void) {
 }
 
 #ifdef ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS
-void DMAC_1_Handler(void) __attribute__((weak, alias("DMAC_0_Handler")));
-void DMAC_2_Handler(void) __attribute__((weak, alias("DMAC_0_Handler")));
-void DMAC_3_Handler(void) __attribute__((weak, alias("DMAC_0_Handler")));
-#ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
-void DMAC_OTHER_Handler(void) __attribute__((weak, alias("DMAC_0_Handler")));
+// These must be strong definitions. The SAME5x Arduino core also supplies
+// weak Dummy_Handler aliases; weak aliases here make vector resolution depend
+// on archive link order and can send active DMA IRQs to Dummy_Handler.
+void DMAC_1_Handler(void) { DMAC_0_Handler(); }
+void DMAC_2_Handler(void) { DMAC_0_Handler(); }
+void DMAC_3_Handler(void) { DMAC_0_Handler(); }
+#if defined(__SAME53__) || defined(__SAME54__)
+void DMAC_OTHER_Handler(void) { DMAC_0_Handler(); }
 #else
-void DMAC_4_Handler(void) __attribute__((weak, alias("DMAC_0_Handler")));
+void DMAC_4_Handler(void) { DMAC_0_Handler(); }
 #endif
 #endif
 }
