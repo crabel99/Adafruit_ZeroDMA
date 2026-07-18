@@ -99,6 +99,168 @@ static Adafruit_ZeroDMA *_dmaPtr[DMAC_CH_NUM] = {0}; // Init to NULL
 #define ADAFRUIT_ZERODMA_DMAC_CHANNEL_BUSY(channel)                            \
   (DMAC->CHSTATUS.reg & DMAC_CHSTATUS_BUSY)
 #endif
+
+#if defined(__SAME53__) || defined(__SAME54__)
+static inline uint16_t descriptorBtctrl(const DmacDescriptor *desc) {
+  return desc->DMAC_BTCTRL;
+}
+
+static inline void descriptorSetBtctrl(DmacDescriptor *desc, uint16_t value) {
+  desc->DMAC_BTCTRL = value;
+}
+
+static inline uint16_t descriptorBtcnt(const DmacDescriptor *desc) {
+  return desc->DMAC_BTCNT;
+}
+
+static inline void descriptorSetBtcnt(DmacDescriptor *desc, uint16_t value) {
+  desc->DMAC_BTCNT = value;
+}
+
+static inline uint32_t descriptorSrcaddr(const DmacDescriptor *desc) {
+  return desc->DMAC_SRCADDR;
+}
+
+static inline void descriptorSetSrcaddr(DmacDescriptor *desc, uint32_t value) {
+  desc->DMAC_SRCADDR = value;
+}
+
+static inline uint32_t descriptorDstaddr(const DmacDescriptor *desc) {
+  return desc->DMAC_DSTADDR;
+}
+
+static inline void descriptorSetDstaddr(DmacDescriptor *desc, uint32_t value) {
+  desc->DMAC_DSTADDR = value;
+}
+
+static inline uint32_t descriptorDescaddr(const DmacDescriptor *desc) {
+  return desc->DMAC_DESCADDR;
+}
+
+static inline void descriptorSetDescaddr(DmacDescriptor *desc, uint32_t value) {
+  desc->DMAC_DESCADDR = value;
+}
+
+static inline uint16_t descriptorBuildBtctrl(dma_beat_size size, bool srcInc,
+                                             bool dstInc, bool stepSel,
+                                             uint32_t stepSize) {
+  return DMAC_BTCTRL_VALID_Msk |
+         DMAC_BTCTRL_EVOSEL(DMA_EVENT_OUTPUT_DISABLE) |
+         DMAC_BTCTRL_BLOCKACT(DMA_BLOCK_ACTION_NOACT) |
+         DMAC_BTCTRL_BEATSIZE(size) |
+         (srcInc ? DMAC_BTCTRL_SRCINC_Msk : 0) |
+         (dstInc ? DMAC_BTCTRL_DSTINC_Msk : 0) |
+         (stepSel ? DMAC_BTCTRL_STEPSEL_Msk : 0) |
+         DMAC_BTCTRL_STEPSIZE(stepSize);
+}
+
+static inline dma_beat_size descriptorBeatSize(const DmacDescriptor *desc) {
+  return static_cast<dma_beat_size>(
+      (descriptorBtctrl(desc) & DMAC_BTCTRL_BEATSIZE_Msk) >>
+      DMAC_BTCTRL_BEATSIZE_Pos);
+}
+
+static inline bool descriptorSrcInc(const DmacDescriptor *desc) {
+  return (descriptorBtctrl(desc) & DMAC_BTCTRL_SRCINC_Msk) != 0;
+}
+
+static inline bool descriptorDstInc(const DmacDescriptor *desc) {
+  return (descriptorBtctrl(desc) & DMAC_BTCTRL_DSTINC_Msk) != 0;
+}
+
+static inline bool descriptorStepSel(const DmacDescriptor *desc) {
+  return (descriptorBtctrl(desc) & DMAC_BTCTRL_STEPSEL_Msk) != 0;
+}
+
+static inline uint8_t descriptorStepSize(const DmacDescriptor *desc) {
+  return (descriptorBtctrl(desc) & DMAC_BTCTRL_STEPSIZE_Msk) >>
+         DMAC_BTCTRL_STEPSIZE_Pos;
+}
+
+static inline bool descriptorValid(const DmacDescriptor *desc) {
+  return (descriptorBtctrl(desc) & DMAC_BTCTRL_VALID_Msk) != 0;
+}
+#else
+static inline uint16_t descriptorBtctrl(const DmacDescriptor *desc) {
+  return desc->BTCTRL.reg;
+}
+
+static inline void descriptorSetBtctrl(DmacDescriptor *desc, uint16_t value) {
+  desc->BTCTRL.reg = value;
+}
+
+static inline uint16_t descriptorBtcnt(const DmacDescriptor *desc) {
+  return desc->BTCNT.reg;
+}
+
+static inline void descriptorSetBtcnt(DmacDescriptor *desc, uint16_t value) {
+  desc->BTCNT.reg = value;
+}
+
+static inline uint32_t descriptorSrcaddr(const DmacDescriptor *desc) {
+  return desc->SRCADDR.reg;
+}
+
+static inline void descriptorSetSrcaddr(DmacDescriptor *desc, uint32_t value) {
+  desc->SRCADDR.reg = value;
+}
+
+static inline uint32_t descriptorDstaddr(const DmacDescriptor *desc) {
+  return desc->DSTADDR.reg;
+}
+
+static inline void descriptorSetDstaddr(DmacDescriptor *desc, uint32_t value) {
+  desc->DSTADDR.reg = value;
+}
+
+static inline uint32_t descriptorDescaddr(const DmacDescriptor *desc) {
+  return desc->DESCADDR.reg;
+}
+
+static inline void descriptorSetDescaddr(DmacDescriptor *desc, uint32_t value) {
+  desc->DESCADDR.reg = value;
+}
+
+static inline uint16_t descriptorBuildBtctrl(dma_beat_size size, bool srcInc,
+                                             bool dstInc, bool stepSel,
+                                             uint32_t stepSize) {
+  return DMAC_BTCTRL_VALID |
+         DMAC_BTCTRL_EVOSEL(DMA_EVENT_OUTPUT_DISABLE) |
+         DMAC_BTCTRL_BLOCKACT(DMA_BLOCK_ACTION_NOACT) |
+         DMAC_BTCTRL_BEATSIZE(size) |
+         (srcInc ? DMAC_BTCTRL_SRCINC : 0) |
+         (dstInc ? DMAC_BTCTRL_DSTINC : 0) |
+         (stepSel ? DMAC_BTCTRL_STEPSEL : 0) |
+         DMAC_BTCTRL_STEPSIZE(stepSize);
+}
+
+static inline dma_beat_size descriptorBeatSize(const DmacDescriptor *desc) {
+  return static_cast<dma_beat_size>(
+      (descriptorBtctrl(desc) & DMAC_BTCTRL_BEATSIZE_Msk) >>
+      DMAC_BTCTRL_BEATSIZE_Pos);
+}
+
+static inline bool descriptorSrcInc(const DmacDescriptor *desc) {
+  return (descriptorBtctrl(desc) & DMAC_BTCTRL_SRCINC) != 0;
+}
+
+static inline bool descriptorDstInc(const DmacDescriptor *desc) {
+  return (descriptorBtctrl(desc) & DMAC_BTCTRL_DSTINC) != 0;
+}
+
+static inline bool descriptorStepSel(const DmacDescriptor *desc) {
+  return (descriptorBtctrl(desc) & DMAC_BTCTRL_STEPSEL) != 0;
+}
+
+static inline uint8_t descriptorStepSize(const DmacDescriptor *desc) {
+  return (descriptorBtctrl(desc) & DMAC_BTCTRL_STEPSIZE_Msk) >>
+         DMAC_BTCTRL_STEPSIZE_Pos;
+}
+
+static inline bool descriptorValid(const DmacDescriptor *desc) {
+  return (descriptorBtctrl(desc) & DMAC_BTCTRL_VALID) != 0;
+}
+#endif // __SAME53__ / __SAME54__
 /// @endcond
 
 // Adapted from ASF3 interrupt_sam_nvic.c:
@@ -486,7 +648,7 @@ ZeroDMAstatus Adafruit_ZeroDMA::startJob(void) {
     status = DMA_STATUS_BUSY; // Resource is busy
   } else if (channel >= DMAC_CH_NUM) {
     status = DMA_STATUS_ERR_NOT_INITIALIZED; // Channel not in use
-  } else if (!hasDescriptors || (_descriptor[channel].BTCNT.reg <= 0)) {
+  } else if (!hasDescriptors || (descriptorBtcnt(&_descriptor[channel]) <= 0)) {
     status = DMA_STATUS_ERR_INVALID_ARG; // Bad transfer size
   } else {
     uint8_t i, interruptMask = 0;
@@ -687,11 +849,11 @@ DmacDescriptor *Adafruit_ZeroDMA::addDescriptor(void *src, void *dst,
     if (!(desc = (DmacDescriptor *)memalign(16, sizeof(DmacDescriptor))))
       return NULL;
     DmacDescriptor *prev = &_descriptor[channel];
-    while (prev->DESCADDR.reg &&
-           (prev->DESCADDR.reg != (uint32_t)&_descriptor[channel])) {
-      prev = (DmacDescriptor *)prev->DESCADDR.reg;
+    while (descriptorDescaddr(prev) &&
+           (descriptorDescaddr(prev) != (uint32_t)&_descriptor[channel])) {
+      prev = (DmacDescriptor *)descriptorDescaddr(prev);
     }
-    prev->DESCADDR.reg = (uint32_t)desc;
+    descriptorSetDescaddr(prev, (uint32_t)desc);
   } else {
     desc = &_descriptor[channel];
   }
@@ -710,36 +872,34 @@ DmacDescriptor *Adafruit_ZeroDMA::addDescriptor(void *src, void *dst,
     break;
   }
 
-  desc->BTCTRL.bit.VALID = true;
-  desc->BTCTRL.bit.EVOSEL = DMA_EVENT_OUTPUT_DISABLE;
-  desc->BTCTRL.bit.BLOCKACT = DMA_BLOCK_ACTION_NOACT;
-  desc->BTCTRL.bit.BEATSIZE = size;
-  desc->BTCTRL.bit.SRCINC = srcInc;
-  desc->BTCTRL.bit.DSTINC = dstInc;
-  desc->BTCTRL.bit.STEPSEL = stepSel;
-  desc->BTCTRL.bit.STEPSIZE = stepSize;
-  desc->BTCNT.reg = count;
-  desc->SRCADDR.reg = (uint32_t)src;
+  descriptorSetBtctrl(desc, descriptorBuildBtctrl(size, srcInc, dstInc,
+                                                  stepSel, stepSize));
+  descriptorSetBtcnt(desc, count);
+  descriptorSetSrcaddr(desc, (uint32_t)src);
 
   if (srcInc) {
     if (stepSel) {
-      desc->SRCADDR.reg += bytesPerBeat * count * (1 << stepSize);
+      descriptorSetSrcaddr(desc, descriptorSrcaddr(desc) +
+                                     bytesPerBeat * count * (1 << stepSize));
     } else {
-      desc->SRCADDR.reg += bytesPerBeat * count;
+      descriptorSetSrcaddr(desc,
+                           descriptorSrcaddr(desc) + bytesPerBeat * count);
     }
   }
 
-  desc->DSTADDR.reg = (uint32_t)dst;
+  descriptorSetDstaddr(desc, (uint32_t)dst);
 
   if (dstInc) {
     if (!stepSel) {
-      desc->DSTADDR.reg += bytesPerBeat * count * (1 << stepSize);
+      descriptorSetDstaddr(desc, descriptorDstaddr(desc) +
+                                     bytesPerBeat * count * (1 << stepSize));
     } else {
-      desc->DSTADDR.reg += bytesPerBeat * count;
+      descriptorSetDstaddr(desc,
+                           descriptorDstaddr(desc) + bytesPerBeat * count);
     }
   }
 
-  desc->DESCADDR.reg = loopFlag ? (uint32_t)&_descriptor[channel] : 0;
+  descriptorSetDescaddr(desc, loopFlag ? (uint32_t)&_descriptor[channel] : 0);
 
   return desc;
 }
@@ -752,7 +912,7 @@ void Adafruit_ZeroDMA::changeDescriptor(DmacDescriptor *desc, void *src,
                                         void *dst, uint32_t count) {
 
   uint8_t bytesPerBeat; // Beat transfer size IN BYTES
-  switch (desc->BTCTRL.bit.BEATSIZE) {
+  switch (descriptorBeatSize(desc)) {
   default:
     bytesPerBeat = 1;
     break;
@@ -765,28 +925,32 @@ void Adafruit_ZeroDMA::changeDescriptor(DmacDescriptor *desc, void *src,
   }
 
   if (count)
-    desc->BTCNT.reg = count;
+    descriptorSetBtcnt(desc, count);
 
   if (src) {
-    desc->SRCADDR.reg = (uint32_t)src;
-    if (desc->BTCTRL.bit.SRCINC) {
-      if (desc->BTCTRL.bit.STEPSEL) {
-        desc->SRCADDR.reg +=
-            desc->BTCNT.reg * bytesPerBeat * (1 << desc->BTCTRL.bit.STEPSIZE);
+    descriptorSetSrcaddr(desc, (uint32_t)src);
+    if (descriptorSrcInc(desc)) {
+      if (descriptorStepSel(desc)) {
+        descriptorSetSrcaddr(desc, descriptorSrcaddr(desc) +
+                                       descriptorBtcnt(desc) * bytesPerBeat *
+                                           (1 << descriptorStepSize(desc)));
       } else {
-        desc->SRCADDR.reg += desc->BTCNT.reg * bytesPerBeat;
+        descriptorSetSrcaddr(desc, descriptorSrcaddr(desc) +
+                                       descriptorBtcnt(desc) * bytesPerBeat);
       }
     }
   }
 
   if (dst) {
-    desc->DSTADDR.reg = (uint32_t)dst;
-    if (desc->BTCTRL.bit.DSTINC) {
-      if (!desc->BTCTRL.bit.STEPSEL) {
-        desc->DSTADDR.reg +=
-            desc->BTCNT.reg * bytesPerBeat * (1 << desc->BTCTRL.bit.STEPSIZE);
+    descriptorSetDstaddr(desc, (uint32_t)dst);
+    if (descriptorDstInc(desc)) {
+      if (!descriptorStepSel(desc)) {
+        descriptorSetDstaddr(desc, descriptorDstaddr(desc) +
+                                       descriptorBtcnt(desc) * bytesPerBeat *
+                                           (1 << descriptorStepSize(desc)));
       } else {
-        desc->DSTADDR.reg += desc->BTCNT.reg * bytesPerBeat;
+        descriptorSetDstaddr(desc, descriptorDstaddr(desc) +
+                                       descriptorBtcnt(desc) * bytesPerBeat);
       }
     }
   }
@@ -823,12 +987,12 @@ void Adafruit_ZeroDMA::loop(boolean flag) {
     // as the first entry, that's the end of the list and it's
     // already looped.
     DmacDescriptor *desc = &_descriptor[channel];
-    while (desc->DESCADDR.reg &&
-           (desc->DESCADDR.reg != (uint32_t)&_descriptor[channel])) {
-      desc = (DmacDescriptor *)desc->DESCADDR.reg;
+    while (descriptorDescaddr(desc) &&
+           (descriptorDescaddr(desc) != (uint32_t)&_descriptor[channel])) {
+      desc = (DmacDescriptor *)descriptorDescaddr(desc);
     }
     // Loop or unloop descriptor list as appropriate
-    desc->DESCADDR.reg = loopFlag ? (uint32_t)&_descriptor[channel] : 0;
+    descriptorSetDescaddr(desc, loopFlag ? (uint32_t)&_descriptor[channel] : 0);
   }
 }
 
@@ -874,5 +1038,5 @@ void Adafruit_ZeroDMA::printStatus(ZeroDMAstatus s) {
 }
 
 bool Adafruit_ZeroDMA::isActive() {
-  return _writeback[channel].BTCTRL.bit.VALID;
+  return descriptorValid(&_writeback[channel]);
 }
