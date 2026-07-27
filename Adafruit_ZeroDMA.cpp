@@ -739,12 +739,34 @@ void Adafruit_ZeroDMA::abort(void) {
 #ifdef ADAFRUIT_ZERODMA_HAS_DMAC_REGS
     ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA &=
         ~DMAC_CHCTRLA_ENABLE_Msk; // Disable channel
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA |=
+        DMAC_CHCTRLA_SWRST_Msk;
+    while (ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA &
+           DMAC_CHCTRLA_SWRST_Msk)
+      ;
+    ADAFRUIT_ZERODMA_DMAC_CHANNEL(channel).DMAC_CHCTRLA =
+        DMAC_CHCTRLA_TRIGSRC(peripheralTrigger) |
+        DMAC_CHCTRLA_TRIGACT(triggerAction);
 #elif defined(ADAFRUIT_ZERODMA_HAS_DMAC_CHANNELS)
     DMAC->Channel[channel].CHCTRLA.bit.ENABLE = 0; // Disable channel
+    DMAC->Channel[channel].CHCTRLA.bit.SWRST = 1;
+    while (DMAC->Channel[channel].CHCTRLA.bit.SWRST)
+      ;
+    DMAC->Channel[channel].CHCTRLA.bit.TRIGSRC = peripheralTrigger;
+    DMAC->Channel[channel].CHCTRLA.bit.TRIGACT = triggerAction;
 #else
     DMAC->CHID.bit.ID = channel; // Select channel
     DMAC->CHCTRLA.reg = 0;       // Disable
+    DMAC->CHCTRLA.bit.SWRST = 1;
+    while (DMAC->CHCTRLA.bit.SWRST)
+      ;
+    DMAC->CHCTRLB.bit.TRIGSRC = peripheralTrigger;
+    DMAC->CHCTRLB.bit.TRIGACT = triggerAction;
 #endif
+    // A channel aborted from SUSPEND can remain pending but never arbitrate
+    // after it is merely disabled and re-enabled. SWRST clears that internal
+    // state; the cached trigger configuration reconstructs the allocated
+    // channel for its next job.
     jobStatus = DMA_STATUS_ABORTED;
     cpu_irq_leave_critical();
   }
