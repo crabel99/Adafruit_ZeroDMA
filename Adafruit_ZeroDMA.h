@@ -174,6 +174,10 @@ public:
   */
   uint8_t getChannel(void);
 
+#if defined(SERCOM_WIRE_TEST_POINTS)
+  int8_t diagnosticJobStatus(void) const;
+#endif
+
   // DMA descriptor functions
 
   /*!
