@@ -101,136 +101,69 @@ static Adafruit_ZeroDMA *_dmaPtr[DMAC_CH_NUM] = {0}; // Init to NULL
 #endif
 
 #if defined(__SAME53__) || defined(__SAME54__)
-static inline uint16_t descriptorBtctrl(const DmacDescriptor *desc) {
-  return desc->DMAC_BTCTRL;
-}
-
-static inline void descriptorSetBtctrl(DmacDescriptor *desc, uint16_t value) {
-  desc->DMAC_BTCTRL = value;
-}
-
-static inline uint16_t descriptorBtcnt(const DmacDescriptor *desc) {
-  return desc->DMAC_BTCNT;
-}
-
-static inline void descriptorSetBtcnt(DmacDescriptor *desc, uint16_t value) {
-  desc->DMAC_BTCNT = value;
-}
-
-static inline uint32_t descriptorSrcaddr(const DmacDescriptor *desc) {
-  return desc->DMAC_SRCADDR;
-}
-
-static inline void descriptorSetSrcaddr(DmacDescriptor *desc, uint32_t value) {
-  desc->DMAC_SRCADDR = value;
-}
-
-static inline uint32_t descriptorDstaddr(const DmacDescriptor *desc) {
-  return desc->DMAC_DSTADDR;
-}
-
-static inline void descriptorSetDstaddr(DmacDescriptor *desc, uint32_t value) {
-  desc->DMAC_DSTADDR = value;
-}
-
-static inline uint32_t descriptorDescaddr(const DmacDescriptor *desc) {
-  return desc->DMAC_DESCADDR;
-}
-
-static inline void descriptorSetDescaddr(DmacDescriptor *desc, uint32_t value) {
-  desc->DMAC_DESCADDR = value;
-}
-
-static inline uint16_t descriptorBuildBtctrl(dma_beat_size size, bool srcInc,
-                                             bool dstInc, bool stepSel,
-                                             uint32_t stepSize) {
-  return DMAC_BTCTRL_VALID_Msk |
-         DMAC_BTCTRL_EVOSEL(DMA_EVENT_OUTPUT_DISABLE) |
-         DMAC_BTCTRL_BLOCKACT(DMA_BLOCK_ACTION_NOACT) |
-         DMAC_BTCTRL_BEATSIZE(size) |
-         (srcInc ? DMAC_BTCTRL_SRCINC_Msk : 0) |
-         (dstInc ? DMAC_BTCTRL_DSTINC_Msk : 0) |
-         (stepSel ? DMAC_BTCTRL_STEPSEL_Msk : 0) |
-         DMAC_BTCTRL_STEPSIZE(stepSize);
-}
-
-static inline dma_beat_size descriptorBeatSize(const DmacDescriptor *desc) {
-  return static_cast<dma_beat_size>(
-      (descriptorBtctrl(desc) & DMAC_BTCTRL_BEATSIZE_Msk) >>
-      DMAC_BTCTRL_BEATSIZE_Pos);
-}
-
-static inline bool descriptorSrcInc(const DmacDescriptor *desc) {
-  return (descriptorBtctrl(desc) & DMAC_BTCTRL_SRCINC_Msk) != 0;
-}
-
-static inline bool descriptorDstInc(const DmacDescriptor *desc) {
-  return (descriptorBtctrl(desc) & DMAC_BTCTRL_DSTINC_Msk) != 0;
-}
-
-static inline bool descriptorStepSel(const DmacDescriptor *desc) {
-  return (descriptorBtctrl(desc) & DMAC_BTCTRL_STEPSEL_Msk) != 0;
-}
-
-static inline uint8_t descriptorStepSize(const DmacDescriptor *desc) {
-  return (descriptorBtctrl(desc) & DMAC_BTCTRL_STEPSIZE_Msk) >>
-         DMAC_BTCTRL_STEPSIZE_Pos;
-}
-
-static inline bool descriptorValid(const DmacDescriptor *desc) {
-  return (descriptorBtctrl(desc) & DMAC_BTCTRL_VALID_Msk) != 0;
-}
+#define ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, field) ((desc)->DMAC_##field)
+#define ADAFRUIT_ZERODMA_BTCTRL_VALID DMAC_BTCTRL_VALID_Msk
+#define ADAFRUIT_ZERODMA_BTCTRL_SRCINC DMAC_BTCTRL_SRCINC_Msk
+#define ADAFRUIT_ZERODMA_BTCTRL_DSTINC DMAC_BTCTRL_DSTINC_Msk
+#define ADAFRUIT_ZERODMA_BTCTRL_STEPSEL DMAC_BTCTRL_STEPSEL_Msk
 #else
+#define ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, field) ((desc)->field.reg)
+#define ADAFRUIT_ZERODMA_BTCTRL_VALID DMAC_BTCTRL_VALID
+#define ADAFRUIT_ZERODMA_BTCTRL_SRCINC DMAC_BTCTRL_SRCINC
+#define ADAFRUIT_ZERODMA_BTCTRL_DSTINC DMAC_BTCTRL_DSTINC
+#define ADAFRUIT_ZERODMA_BTCTRL_STEPSEL DMAC_BTCTRL_STEPSEL
+#endif // __SAME53__ / __SAME54__
+
 static inline uint16_t descriptorBtctrl(const DmacDescriptor *desc) {
-  return desc->BTCTRL.reg;
+  return ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, BTCTRL);
 }
 
 static inline void descriptorSetBtctrl(DmacDescriptor *desc, uint16_t value) {
-  desc->BTCTRL.reg = value;
+  ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, BTCTRL) = value;
 }
 
 static inline uint16_t descriptorBtcnt(const DmacDescriptor *desc) {
-  return desc->BTCNT.reg;
+  return ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, BTCNT);
 }
 
 static inline void descriptorSetBtcnt(DmacDescriptor *desc, uint16_t value) {
-  desc->BTCNT.reg = value;
+  ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, BTCNT) = value;
 }
 
 static inline uint32_t descriptorSrcaddr(const DmacDescriptor *desc) {
-  return desc->SRCADDR.reg;
+  return ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, SRCADDR);
 }
 
 static inline void descriptorSetSrcaddr(DmacDescriptor *desc, uint32_t value) {
-  desc->SRCADDR.reg = value;
+  ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, SRCADDR) = value;
 }
 
 static inline uint32_t descriptorDstaddr(const DmacDescriptor *desc) {
-  return desc->DSTADDR.reg;
+  return ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, DSTADDR);
 }
 
 static inline void descriptorSetDstaddr(DmacDescriptor *desc, uint32_t value) {
-  desc->DSTADDR.reg = value;
+  ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, DSTADDR) = value;
 }
 
 static inline uint32_t descriptorDescaddr(const DmacDescriptor *desc) {
-  return desc->DESCADDR.reg;
+  return ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, DESCADDR);
 }
 
 static inline void descriptorSetDescaddr(DmacDescriptor *desc, uint32_t value) {
-  desc->DESCADDR.reg = value;
+  ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD(desc, DESCADDR) = value;
 }
 
 static inline uint16_t descriptorBuildBtctrl(dma_beat_size size, bool srcInc,
                                              bool dstInc, bool stepSel,
                                              uint32_t stepSize) {
-  return DMAC_BTCTRL_VALID |
+  return ADAFRUIT_ZERODMA_BTCTRL_VALID |
          DMAC_BTCTRL_EVOSEL(DMA_EVENT_OUTPUT_DISABLE) |
          DMAC_BTCTRL_BLOCKACT(DMA_BLOCK_ACTION_NOACT) |
          DMAC_BTCTRL_BEATSIZE(size) |
-         (srcInc ? DMAC_BTCTRL_SRCINC : 0) |
-         (dstInc ? DMAC_BTCTRL_DSTINC : 0) |
-         (stepSel ? DMAC_BTCTRL_STEPSEL : 0) |
+         (srcInc ? ADAFRUIT_ZERODMA_BTCTRL_SRCINC : 0) |
+         (dstInc ? ADAFRUIT_ZERODMA_BTCTRL_DSTINC : 0) |
+         (stepSel ? ADAFRUIT_ZERODMA_BTCTRL_STEPSEL : 0) |
          DMAC_BTCTRL_STEPSIZE(stepSize);
 }
 
@@ -241,15 +174,15 @@ static inline dma_beat_size descriptorBeatSize(const DmacDescriptor *desc) {
 }
 
 static inline bool descriptorSrcInc(const DmacDescriptor *desc) {
-  return (descriptorBtctrl(desc) & DMAC_BTCTRL_SRCINC) != 0;
+  return (descriptorBtctrl(desc) & ADAFRUIT_ZERODMA_BTCTRL_SRCINC) != 0;
 }
 
 static inline bool descriptorDstInc(const DmacDescriptor *desc) {
-  return (descriptorBtctrl(desc) & DMAC_BTCTRL_DSTINC) != 0;
+  return (descriptorBtctrl(desc) & ADAFRUIT_ZERODMA_BTCTRL_DSTINC) != 0;
 }
 
 static inline bool descriptorStepSel(const DmacDescriptor *desc) {
-  return (descriptorBtctrl(desc) & DMAC_BTCTRL_STEPSEL) != 0;
+  return (descriptorBtctrl(desc) & ADAFRUIT_ZERODMA_BTCTRL_STEPSEL) != 0;
 }
 
 static inline uint8_t descriptorStepSize(const DmacDescriptor *desc) {
@@ -258,9 +191,14 @@ static inline uint8_t descriptorStepSize(const DmacDescriptor *desc) {
 }
 
 static inline bool descriptorValid(const DmacDescriptor *desc) {
-  return (descriptorBtctrl(desc) & DMAC_BTCTRL_VALID) != 0;
+  return (descriptorBtctrl(desc) & ADAFRUIT_ZERODMA_BTCTRL_VALID) != 0;
 }
-#endif // __SAME53__ / __SAME54__
+
+#undef ADAFRUIT_ZERODMA_DESCRIPTOR_FIELD
+#undef ADAFRUIT_ZERODMA_BTCTRL_VALID
+#undef ADAFRUIT_ZERODMA_BTCTRL_SRCINC
+#undef ADAFRUIT_ZERODMA_BTCTRL_DSTINC
+#undef ADAFRUIT_ZERODMA_BTCTRL_STEPSEL
 /// @endcond
 
 // Adapted from ASF3 interrupt_sam_nvic.c:
@@ -900,8 +838,8 @@ DmacDescriptor *Adafruit_ZeroDMA::addDescriptor(void *src, void *dst,
     break;
   }
 
-  descriptorSetBtctrl(desc, descriptorBuildBtctrl(size, srcInc, dstInc,
-                                                  stepSel, stepSize));
+  descriptorSetBtctrl(
+      desc, descriptorBuildBtctrl(size, srcInc, dstInc, stepSel, stepSize));
   descriptorSetBtcnt(desc, count);
   descriptorSetSrcaddr(desc, (uint32_t)src);
 
