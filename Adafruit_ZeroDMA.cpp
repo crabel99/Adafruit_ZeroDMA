@@ -770,12 +770,6 @@ void Adafruit_ZeroDMA::trigger(void) {
 
 uint8_t Adafruit_ZeroDMA::getChannel(void) { return channel; }
 
-#if defined(SERCOM_WIRE_TEST_POINTS)
-int8_t Adafruit_ZeroDMA::diagnosticJobStatus(void) const {
-  return static_cast<int8_t>(jobStatus);
-}
-#endif
-
 // DMA DESCRIPTOR FUNCTIONS ------------------------------------------------
 
 // Allocates a new DMA descriptor (if needed) and appends it to the
